@@ -1,0 +1,197 @@
+<section class="container">
+  <h1>Buscar en repositorios</h1>
+  <p class="lead">
+    Busca una dependencia, término o nombre de archivo en todos los repositorios y ramas del proyecto de Azure DevOps que indiques. Puedes lanzar varias búsquedas a la vez; cada una se ejecuta en su propia sesión.
+  </p>
+
+  @if (config() && !config()!.patConfigured) {
+    <div class="alert alert-warning" role="alert">
+      <span>El servidor no tiene configurado el token de Azure DevOps. No se podrán iniciar búsquedas. <a routerLink="/configuracion">Configurar token</a></span>
+    </div>
+  }
+
+  <div class="card import-box">
+    <div class="field">
+      <label for="importCfg">Importar configuración de búsqueda (JSON)</label>
+      <input id="importCfg" type="file" accept=".json,application/json" (change)="importConfig($event)" aria-describedby="importCfg-help" />
+      <p id="importCfg-help" class="help">Carga en el formulario una configuración exportada antes, para repetir una búsqueda sin volver a digitarla.</p>
+    </div>
+  </div>
+
+  <form class="card" (submit)="submit($event)" novalidate>
+    <div class="field">
+      <label for="project">Proyecto de Azure DevOps <span class="req" aria-hidden="true">*</span></label>
+      <input
+        id="project"
+        name="project"
+        type="text"
+        autocomplete="off"
+        required
+        aria-required="true"
+        maxlength="64"
+        [value]="project()"
+        (input)="project.set($any($event.target).value)"
+        [attr.aria-invalid]="touched() && !project().trim() ? 'true' : null"
+        aria-describedby="project-help project-error"
+      />
+      <p id="project-help" class="help">Se buscará en todos los repositorios de este proyecto (organización: {{ config()?.org }}).</p>
+      @if (touched() && !project().trim()) {
+        <p id="project-error" class="field-error" role="alert">Debes ingresar el nombre del proyecto.</p>
+      }
+    </div>
+
+    <div class="field">
+      <label for="term">Dependencia, término o nombre de archivo <span class="req" aria-hidden="true">*</span></label>
+      <input
+        id="term"
+        name="term"
+        type="text"
+        autocomplete="off"
+        required
+        aria-required="true"
+        maxlength="200"
+        [value]="term()"
+        (input)="term.set($any($event.target).value)"
+        [attr.aria-invalid]="touched() && !term().trim() ? 'true' : null"
+        aria-describedby="term-help term-error"
+      />
+      <p id="term-help" class="help">Ejemplo: <code>@angular/core</code> o <code>appsettings.json</code>. No distingue mayúsculas.</p>
+      @if (touched() && !term().trim()) {
+        <p id="term-error" class="field-error" role="alert">Debes ingresar un término de búsqueda.</p>
+      }
+    </div>
+
+    <fieldset class="field branch-box">
+      <legend>Alcance de la búsqueda</legend>
+      <label class="check">
+        <input type="checkbox" id="byBranch" [checked]="byBranch()" (change)="byBranch.set($any($event.target).checked)" aria-controls="branch-fields" aria-describedby="byBranch-help" />
+        Buscar en una sola rama de un repositorio
+      </label>
+      <p id="byBranch-help" class="help">Desactivado: se recorren todos los repositorios y todas las ramas del proyecto. Activado: solo el repositorio y la rama indicados.</p>
+      <div id="branch-fields" class="branch-fields">
+        @if (byBranch()) {
+          <div class="field">
+            <label for="repo">Repositorio <span class="req" aria-hidden="true">*</span></label>
+            <input id="repo" type="text" autocomplete="off" required aria-required="true" maxlength="128" [value]="repo()" (input)="repo.set($any($event.target).value)" [attr.aria-invalid]="touched() && !repo().trim() ? 'true' : null" />
+            @if (touched() && !repo().trim()) {
+              <p class="field-error" role="alert">Debes ingresar el nombre del repositorio.</p>
+            }
+          </div>
+          <div class="field">
+            <label for="branch">Rama <span class="req" aria-hidden="true">*</span></label>
+            <input id="branch" type="text" autocomplete="off" required aria-required="true" maxlength="128" [value]="branch()" (input)="branch.set($any($event.target).value)" [attr.aria-invalid]="touched() && !branch().trim() ? 'true' : null" />
+            @if (touched() && !branch().trim()) {
+              <p class="field-error" role="alert">Debes ingresar el nombre de la rama.</p>
+            }
+          </div>
+        }
+      </div>
+    </fieldset>
+
+    <div class="field">
+      <label for="fileName">Nombre del archivo de resultados (opcional)</label>
+      <input
+        id="fileName"
+        name="fileName"
+        type="text"
+        autocomplete="off"
+        maxlength="80"
+        [value]="fileName()"
+        (input)="fileName.set($any($event.target).value)"
+        aria-describedby="file-help"
+      />
+      <p id="file-help" class="help">
+        Si lo dejas vacío se generará uno automático con el término y la fecha, por ejemplo
+        <code>busqueda_{{ project().trim() || 'proyecto' }}_{{ term().trim() || 'termino' }}_20261019-091500.txt</code>.
+      </p>
+    </div>
+
+    @if (error()) {
+      <p class="alert alert-error" role="alert">{{ error() }}</p>
+    }
+
+    <button type="submit" class="btn btn-primary" [disabled]="submitting()">
+      {{ submitting() ? 'Iniciando…' : 'Iniciar búsqueda' }}
+    </button>
+  </form>
+
+  <h2>Búsquedas</h2>
+  <p class="sr-only" role="status" aria-live="polite">{{ notice() }}</p>
+  @if (notice()) {
+    <p class="alert alert-success" role="status">{{ notice() }}</p>
+  }
+
+  @if (loaded() && searches().length > 0) {
+    <div class="field filter">
+      <label for="searchFilter">Filtrar búsquedas</label>
+      <input
+        id="searchFilter"
+        type="text"
+        autocomplete="off"
+        placeholder="Término, proyecto, repositorio, rama, archivo o estado"
+        [value]="filter()"
+        (input)="filter.set($any($event.target).value)"
+        aria-describedby="filter-count"
+      />
+      <p id="filter-count" class="help" role="status" aria-live="polite">
+        Mostrando {{ filtered().length }} de {{ searches().length }} búsquedas.
+      </p>
+    </div>
+  }
+
+  @if (!loaded()) {
+    <p>Cargando búsquedas…</p>
+  } @else if (searches().length === 0) {
+    <p class="empty">Aún no hay búsquedas. Inicia la primera con el formulario.</p>
+  } @else if (filtered().length === 0) {
+    <p class="alert alert-warning">Ninguna búsqueda coincide con el filtro.</p>
+  } @else {
+    <div class="list-scroll" tabindex="0" role="region" aria-label="Listado de búsquedas">
+    <ul class="list">
+      @for (s of filtered(); track s.id) {
+        <li class="card item">
+          <div class="item-head">
+            <h3>
+              <a [routerLink]="['/busquedas', s.id]">{{ s.term }}</a>
+            </h3>
+            <app-status-badge [status]="s.status" />
+          </div>
+          <p class="meta">
+            Proyecto: <code>{{ s.project || config()?.project }}</code> ·
+            @if (isByBranch(s)) { Alcance: <code>{{ s.repo }}</code> · <code>{{ s.branch }}</code> } @else { Alcance: todos los repositorios y ramas }
+            · Archivo: <code>{{ s.fileName }}</code> · Creada {{ s.createdAt | date: 'dd/MM/yyyy HH:mm:ss' }}
+          </p>
+          @if (s.status === 'running' && activeOf(s).length) {
+            <div class="current">
+              Buscando en:
+              <ul class="active-list">
+                @for (a of activeOf(s); track a.repo + a.branch) {
+                  <li><strong>{{ a.repo }}</strong>@if (a.branch) { · rama <strong>{{ a.branch }}</strong> }</li>
+                }
+              </ul>
+            </div>
+          }
+          @if (s.progress.total) {
+            <div class="progress-row">
+              <progress [value]="s.progress.done" [max]="s.progress.total" [attr.aria-label]="'Progreso de ' + s.term"></progress>
+              <span>{{ s.progress.done }}/{{ s.progress.total }} repositorios · {{ s.progress.matches }} con coincidencias</span>
+            </div>
+          }
+          <div class="actions">
+            <a class="btn btn-secondary" [routerLink]="['/busquedas', s.id]">Ver detalle<span class="sr-only"> de {{ s.term }}</span></a>
+            <button type="button" class="btn btn-secondary" (click)="exportConfig(s)">Exportar configuración<span class="sr-only"> de {{ s.term }}</span></button>
+            @if (isActive(s.status)) {
+              <button type="button" class="btn btn-secondary" (click)="cancel(s)">Cancelar<span class="sr-only"> {{ s.term }}</span></button>
+            } @else {
+              @if (s.resultSize) {
+                <a class="btn btn-secondary" [href]="downloadUrl(s)" download>Descargar<span class="sr-only"> {{ s.fileName }}</span></a>
+              }
+              <button type="button" class="btn btn-danger-outline" (click)="remove(s)">Eliminar<span class="sr-only"> {{ s.term }}</span></button>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+    </div>
+  }
+</section>

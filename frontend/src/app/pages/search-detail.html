@@ -1,0 +1,79 @@
+<section class="container">
+  <nav aria-label="Migas de pan"><a routerLink="/">← Volver a las búsquedas</a></nav>
+
+  @if (error()) {
+    <p class="alert alert-error" role="alert">{{ error() }}</p>
+  }
+
+  @if (search(); as s) {
+    <div class="item-head">
+      <h1>Búsqueda: {{ s.term }}</h1>
+      <app-status-badge [status]="s.status" />
+    </div>
+
+    <dl class="card details">
+      <div><dt>Proyecto</dt><dd>{{ s.project || '—' }}</dd></div>
+      <div><dt>Alcance</dt><dd>@if (isByBranch(s)) { Un repositorio y una rama concretos: <code>{{ s.repo }}</code> · <code>{{ s.branch }}</code> } @else { Todos los repositorios y todas las ramas }</dd></div>
+      <div><dt>Archivo de resultados</dt><dd><code>{{ s.fileName }}</code></dd></div>
+      <div><dt>Creada</dt><dd>{{ s.createdAt | date: 'dd/MM/yyyy HH:mm:ss' }}</dd></div>
+      @if (s.finishedAt) {
+        <div><dt>Finalizada</dt><dd>{{ s.finishedAt | date: 'dd/MM/yyyy HH:mm:ss' }}</dd></div>
+      }
+      <div><dt>Repositorios con coincidencias</dt><dd>{{ s.progress.matches }}</dd></div>
+    </dl>
+
+    @if (s.status === 'running' && activeOf(s).length) {
+      <div class="current">
+        Buscando en:
+        <ul class="active-list">
+          @for (a of activeOf(s); track a.repo + a.branch) {
+            <li><strong>{{ a.repo }}</strong>@if (a.branch) { · rama <strong>{{ a.branch }}</strong> }</li>
+          }
+        </ul>
+      </div>
+    }
+
+    @if (s.progress.total) {
+      <div class="progress-row">
+        <progress [value]="s.progress.done" [max]="s.progress.total" aria-label="Progreso de la búsqueda"></progress>
+        <span>{{ s.progress.done }}/{{ s.progress.total }} repositorios ({{ pct(s) }}%)</span>
+      </div>
+    }
+
+    @if (s.error) {
+      <p class="alert alert-error" role="alert"><strong>Error:</strong> {{ s.error }}</p>
+    }
+
+    <div class="actions">
+      <button type="button" class="btn btn-secondary" (click)="exportConfig(s)">Exportar configuración (JSON)</button>
+      @if (isActive(s.status)) {
+        <button type="button" class="btn btn-secondary" (click)="cancel()" [disabled]="cancelling()">{{ cancelling() ? 'Cancelando…' : 'Cancelar búsqueda' }}</button>
+      } @else {
+        @if (s.resultSize) {
+          <a class="btn btn-primary" [href]="downloadUrl()" download>Descargar {{ s.fileName }}</a>
+        }
+        <button type="button" class="btn btn-danger-outline" (click)="remove()">Eliminar</button>
+      }
+    </div>
+
+    <h2 id="detail-title">Detalle de la búsqueda (en vivo)</h2>
+    @if (notice()) {
+      <p class="help" role="status">{{ notice() }}</p>
+    }
+    <app-match-list
+      [engine]="engine"
+      [emptyText]="isActive(s.status) ? 'Aún no hay coincidencias; se mostrarán aquí a medida que se encuentren.' : 'No se encontraron coincidencias.'"
+    />
+
+    <h2 id="log-title">Registro de ejecución</h2>
+    <div id="log" class="log" role="log" aria-labelledby="log-title" aria-live="off" tabindex="0">
+      @for (l of logs(); track $index) {
+        <div><time>{{ l.t | date: 'HH:mm:ss' }}</time> {{ l.line }}</div>
+      } @empty {
+        <div>Sin registros todavía.</div>
+      }
+    </div>
+  } @else if (!error()) {
+    <p>Cargando…</p>
+  }
+</section>
