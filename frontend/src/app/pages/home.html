@@ -1,8 +1,13 @@
-<section class="container">
-  <h1>Buscar en repositorios</h1>
-  <p class="lead">
-    Busca una dependencia, término o nombre de archivo en todos los repositorios y ramas del proyecto de Azure DevOps que indiques. Puedes lanzar varias búsquedas a la vez; cada una se ejecuta en su propia sesión.
-  </p>
+<section class="container container-wide">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow">Azure DevOps · {{ config()?.org }}</span>
+      <h1>Buscar en repositorios</h1>
+      <p class="lead">
+        Busca una dependencia, término o nombre de archivo en todos los repositorios y ramas de los proyectos que elijas. Puedes lanzar varias búsquedas a la vez; cada una se ejecuta en su propia sesión.
+      </p>
+    </div>
+  </header>
 
   @if (config() && !config()!.patConfigured) {
     <div class="alert alert-warning" role="alert">
@@ -10,17 +15,20 @@
     </div>
   }
 
-  <div class="card import-box">
-    <div class="field">
-      <label for="importCfg">Importar configuración de búsqueda (JSON)</label>
-      <input id="importCfg" type="file" accept=".json,application/json" (change)="importConfig($event)" aria-describedby="importCfg-help" />
-      <p id="importCfg-help" class="help">Carga en el formulario una configuración exportada antes, para repetir una búsqueda sin volver a digitarla.</p>
+  <form class="card" (submit)="submit($event)" novalidate aria-labelledby="form-title">
+    <div class="card-head">
+      <h2 id="form-title">Nueva búsqueda</h2>
+      <div>
+        <label for="importCfg" class="sr-only">Importar configuración de búsqueda (JSON)</label>
+        <input id="importCfg" type="file" accept=".json,application/json" (change)="importConfig($event)" aria-describedby="importCfg-help" />
+        <p id="importCfg-help" class="help">Importa una configuración exportada (JSON) para repetir una búsqueda.</p>
+      </div>
     </div>
-  </div>
 
-  <form class="card" (submit)="submit($event)" novalidate>
-    <fieldset class="field branch-box">
-      <legend>Proyectos de Azure DevOps <span class="req" aria-hidden="true">*</span></legend>
+    <div class="form-grid">
+    <div class="form-col">
+    <fieldset class="branch-box">
+      <legend class="section-title"><span class="step" aria-hidden="true">1</span> Proyectos de Azure DevOps <span class="req" aria-hidden="true">*</span></legend>
       <div class="field">
         <label for="project">Proyecto</label>
         <div class="input-row">
@@ -39,7 +47,7 @@
           <button type="button" class="btn btn-secondary" (click)="addFavorite()">Agregar a favoritos</button>
         </div>
         <p id="project-help" class="help">
-          Organización: {{ config()?.org }}. Escribe un proyecto para buscar solo esta vez, o agrégalo a favoritos para conservarlo. Se buscará en el proyecto escrito y en todos los favoritos marcados.
+          Escribe un proyecto para buscar solo esta vez, o agrégalo a favoritos para conservarlo. Se buscará en el proyecto escrito y en todos los favoritos marcados.
         </p>
         @if (touched() && !selectedProjects().length) {
           <p id="project-error" class="field-error" role="alert">Debes ingresar un proyecto o marcar al menos un favorito.</p>
@@ -48,7 +56,7 @@
 
       @if (favorites().length) {
         <div class="favorites-head">
-          <span id="fav-label">Favoritos ({{ favorites().length }})</span>
+          <span id="fav-label">★ Favoritos <span class="count-pill">{{ favorites().length }}</span></span>
           <button type="button" class="btn-link" (click)="selectAllFavorites(true)">Marcar todos</button>
           <button type="button" class="btn-link" (click)="selectAllFavorites(false)">Desmarcar todos</button>
         </div>
@@ -69,7 +77,7 @@
       @if (favoriteError()) {
         <p class="field-error" role="alert">{{ favoriteError() }}</p>
       }
-      <p class="help" role="status" aria-live="polite">
+      <p class="selection" role="status" aria-live="polite">
         @if (selectedProjects().length) {
           Se buscará en {{ selectedProjects().length }} {{ selectedProjects().length === 1 ? 'proyecto' : 'proyectos' }}: <strong>{{ selectedProjects().join(', ') }}</strong>
         } @else {
@@ -77,9 +85,11 @@
         }
       </p>
     </fieldset>
+    </div>
 
-    <div class="field">
-      <label for="term">Dependencia, término o nombre de archivo <span class="req" aria-hidden="true">*</span></label>
+    <div class="form-col">
+    <div class="field branch-box">
+      <label for="term" class="section-title"><span class="step" aria-hidden="true">2</span> Dependencia, término o nombre de archivo <span class="req" aria-hidden="true">*</span></label>
       <input
         id="term"
         name="term"
@@ -99,8 +109,8 @@
       }
     </div>
 
-    <fieldset class="field branch-box">
-      <legend>Alcance de la búsqueda</legend>
+    <fieldset class="branch-box">
+      <legend class="section-title"><span class="step" aria-hidden="true">3</span> Alcance de la búsqueda</legend>
       <label class="check">
         <input type="checkbox" id="byBranch" [checked]="byBranch()" (change)="byBranch.set($any($event.target).checked)" aria-controls="branch-fields" aria-describedby="byBranch-help" />
         Buscar en una sola rama de un repositorio
@@ -126,8 +136,8 @@
       </div>
     </fieldset>
 
-    <div class="field">
-      <label for="fileName">Nombre del archivo de resultados (opcional)</label>
+    <div class="field branch-box">
+      <label for="fileName" class="section-title"><span class="step" aria-hidden="true">4</span> Archivo de resultados (opcional)</label>
       <input
         id="fileName"
         name="fileName"
@@ -144,17 +154,29 @@
         Con varios proyectos se lanza una búsqueda por proyecto y, si indicas un nombre, se le agrega el proyecto al final.
       </p>
     </div>
+    </div>
+    </div>
 
-    @if (error()) {
-      <p class="alert alert-error" role="alert">{{ error() }}</p>
-    }
-
-    <button type="submit" class="btn btn-primary" [disabled]="submitting()">
-      {{ submitting() ? 'Iniciando…' : selectedProjects().length > 1 ? 'Iniciar ' + selectedProjects().length + ' búsquedas' : 'Iniciar búsqueda' }}
-    </button>
+    <div class="form-foot">
+      @if (error()) {
+        <p class="alert alert-error" role="alert">{{ error() }}</p>
+      }
+      <p class="help">Cada proyecto se ejecuta en su propia sesión; puedes seguir el progreso abajo.</p>
+      <button type="submit" class="btn btn-primary btn-lg" [disabled]="submitting()">
+        {{ submitting() ? 'Iniciando…' : selectedProjects().length > 1 ? 'Iniciar ' + selectedProjects().length + ' búsquedas' : 'Iniciar búsqueda' }}
+      </button>
+    </div>
   </form>
 
   <h2>Búsquedas</h2>
+  @if (loaded() && searches().length > 0) {
+    <ul class="stats" aria-label="Resumen de búsquedas">
+      <li class="stat"><span class="stat-value">{{ stats().total }}</span><span class="stat-label">En total</span></li>
+      <li class="stat stat-running"><span class="stat-value">{{ stats().active }}</span><span class="stat-label">En curso o en cola</span></li>
+      <li class="stat stat-completed"><span class="stat-value">{{ stats().completed }}</span><span class="stat-label">Completadas</span></li>
+      <li class="stat stat-failed"><span class="stat-value">{{ stats().problems }}</span><span class="stat-label">Con error o detenidas</span></li>
+    </ul>
+  }
   <p class="sr-only" role="status" aria-live="polite">{{ notice() }}</p>
   @if (notice()) {
     <p class="alert alert-success" role="status">{{ notice() }}</p>
@@ -188,7 +210,7 @@
     <div class="list-scroll" tabindex="0" role="region" aria-label="Listado de búsquedas">
     <ul class="list">
       @for (s of filtered(); track s.id) {
-        <li class="card item">
+        <li [class]="'card item status-' + s.status">
           <div class="item-head">
             <h3>
               <a [routerLink]="['/busquedas', s.id]">{{ s.term }}</a>
@@ -196,9 +218,10 @@
             <app-status-badge [status]="s.status" />
           </div>
           <p class="meta">
-            Proyecto: <code>{{ s.project || config()?.project }}</code> ·
-            @if (isByBranch(s)) { Alcance: <code>{{ s.repo }}</code> · <code>{{ s.branch }}</code> } @else { Alcance: todos los repositorios y ramas }
-            · Archivo: <code>{{ s.fileName }}</code> · Creada {{ s.createdAt | date: 'dd/MM/yyyy HH:mm:ss' }}
+            <span><span class="meta-key">Proyecto</span> <code>{{ s.project || config()?.project }}</code></span>
+            <span><span class="meta-key">Alcance</span> @if (isByBranch(s)) { <code>{{ s.repo }}</code> · <code>{{ s.branch }}</code> } @else { todos los repositorios y ramas }</span>
+            <span><span class="meta-key">Archivo</span> <code>{{ s.fileName }}</code></span>
+            <span><span class="meta-key">Creada</span> {{ s.createdAt | date: 'dd/MM/yyyy HH:mm:ss' }}</span>
           </p>
           @if (s.status === 'running' && activeOf(s).length) {
             <div class="current">

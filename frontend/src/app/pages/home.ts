@@ -49,6 +49,16 @@ export class Home implements OnInit {
       return words.every((w) => hay.includes(w));
     });
   });
+  stats = computed(() => {
+    const list = this.searches();
+    const count = (...st: Search['status'][]) => list.filter((s) => st.includes(s.status)).length;
+    return {
+      total: list.length,
+      active: count('queued', 'running'),
+      completed: count('completed'),
+      problems: count('failed', 'cancelled', 'interrupted'),
+    };
+  });
   isActive = isActive;
   activeOf = activeOf;
   isByBranch = isByBranch;
