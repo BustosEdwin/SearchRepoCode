@@ -30,6 +30,18 @@ if (stored) {
   patSource = 'store';
 }
 
+// Proyectos favoritos: lista persistente con la selección usada para lanzar búsquedas en varios proyectos.
+const favoritesPath = path.resolve(root, process.env.DATA_DIR ?? 'data', 'favorites.json');
+const MAX_FAVORITES = 100;
+const validProject = (p) => typeof p === 'string' && !!p.trim() && p.trim().length <= 64 && !/[\u0000-\u001f/\\?#%]/.test(p);
+let favorites = [];
+try {
+  const saved = JSON.parse(await readFile(favoritesPath, 'utf8'));
+  favorites = Array.isArray(saved) ? saved.filter((f) => validProject(f?.name)) : [];
+} catch {
+  /* aún no hay favoritos */
+}
+
 // Un error inesperado en una búsqueda no debe tumbar el servidor (el proxy respondería 502 a todo).
 process.on('unhandledRejection', (e) => console.error('unhandledRejection:', e));
 process.on('uncaughtException', (e) => console.error('uncaughtException:', e));
@@ -234,6 +246,27 @@ app.delete('/api/settings/pat', adminOnly, async (_req, res) => {
 
 app.get('/api/config', (_req, res) => res.json({ org: config.org, project: config.project, patConfigured: !!config.pat, maxConcurrent: MAX_CONCURRENT }));
 
+app.get('/api/favorites', (_req, res) => res.json(favorites));
+
+app.put('/api/favorites', async (req, res) => {
+  const list = req.body?.projects;
+  if (!Array.isArray(list) || list.length > MAX_FAVORITES) {
+    return res.status(400).json({ error: `La lista de favoritos debe tener como máximo ${MAX_FAVORITES} proyectos.` });
+  }
+  const seen = new Set();
+  const next = [];
+  for (const f of list) {
+    if (!validProject(f?.name)) return res.status(400).json({ error: `El nombre de proyecto "${String(f?.name ?? '')}" no es válido.` });
+    const name = f.name.trim();
+    if (seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    next.push({ name, selected: f.selected === true });
+  }
+  await writeFile(favoritesPath, JSON.stringify(next, null, 2));
+  favorites = next;
+  res.json(favorites);
+});
+
 app.get('/api/searches', (_req, res) =>
   res.json([...jobs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(publicJob)),
 );
@@ -244,7 +277,7 @@ app.post('/api/searches', async (req, res) => {
   if (term.length > 200) return res.status(400).json({ error: 'El término es demasiado largo (máximo 200 caracteres).' });
   if (!config.pat) return res.status(503).json({ error: 'El servidor no tiene configurado AZDO_PAT.' });
   const project = String(req.body?.project ?? '').trim() || config.project;
-  if (project.length > 64 || /[\u0000-\u001f/\\?#%]/.test(project)) {
+  if (!validProject(project)) {
     return res.status(400).json({ error: 'El nombre del proyecto no es válido.' });
   }
 

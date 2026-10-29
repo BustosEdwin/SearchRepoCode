@@ -2,8 +2,8 @@ import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
-import { timer } from 'rxjs';
-import { AppConfig, STATUS_LABEL, Search, SearchApi, activeOf, downloadConfig, isActive, isByBranch, parseConfig } from '../search-api';
+import { catchError, forkJoin, map, of, timer } from 'rxjs';
+import { AppConfig, FavoriteProject, STATUS_LABEL, Search, SearchApi, activeOf, downloadConfig, isActive, isByBranch, parseConfig } from '../search-api';
 import { StatusBadge } from './status-badge';
 
 @Component({
@@ -27,6 +27,15 @@ export class Home implements OnInit {
   notice = signal('');
   touched = signal(false);
   config = signal<AppConfig | null>(null);
+  favorites = signal<FavoriteProject[]>([]);
+  favoriteError = signal('');
+  /** Proyectos donde se lanzará la búsqueda: favoritos marcados más el proyecto escrito. */
+  selectedProjects = computed(() => {
+    const names = this.favorites().filter((f) => f.selected).map((f) => f.name);
+    const typed = this.project().trim();
+    if (typed && !names.some((n) => n.toLowerCase() === typed.toLowerCase())) names.push(typed);
+    return names;
+  });
   searches = signal<Search[]>([]);
   loaded = signal(false);
   filter = signal('');
@@ -67,13 +76,61 @@ export class Home implements OnInit {
   }
 
   ngOnInit() {
-    this.api.config().subscribe((c) => {
-      this.config.set(c);
-      if (!this.project()) this.project.set(c.project);
+    forkJoin({ config: this.api.config(), favorites: this.api.favorites().pipe(catchError(() => of([]))) }).subscribe(({ config, favorites }) => {
+      this.config.set(config);
+      this.favorites.set(favorites);
+      // Con favoritos marcados no se agrega el proyecto por defecto, para no buscar donde no se pidió.
+      if (!this.project() && !favorites.some((f) => f.selected)) this.project.set(config.project);
     });
     timer(0, 3000)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.refresh());
+  }
+
+  private saveFavorites(next: FavoriteProject[], done?: string) {
+    const prev = this.favorites();
+    this.favorites.set(next);
+    this.favoriteError.set('');
+    this.api.saveFavorites(next).subscribe({
+      next: (saved) => {
+        this.favorites.set(saved);
+        if (done) this.notice.set(done);
+      },
+      error: (e) => {
+        this.favorites.set(prev);
+        this.favoriteError.set(e.error?.error ?? 'No se pudieron guardar los favoritos.');
+      },
+    });
+  }
+
+  addFavorite() {
+    const name = this.project().trim();
+    if (!name) {
+      this.favoriteError.set('Escribe el nombre del proyecto que quieres agregar a favoritos.');
+      document.getElementById('project')?.focus();
+      return;
+    }
+    const exists = this.favorites().some((f) => f.name.toLowerCase() === name.toLowerCase());
+    const next = exists
+      ? this.favorites().map((f) => (f.name.toLowerCase() === name.toLowerCase() ? { ...f, selected: true } : f))
+      : [...this.favorites(), { name, selected: true }];
+    this.project.set('');
+    this.saveFavorites(next, exists ? `"${name}" ya estaba en favoritos; quedó seleccionado.` : `"${name}" agregado a favoritos.`);
+  }
+
+  toggleFavorite(fav: FavoriteProject, selected: boolean) {
+    this.saveFavorites(this.favorites().map((f) => (f.name === fav.name ? { ...f, selected } : f)));
+  }
+
+  selectAllFavorites(selected: boolean) {
+    this.saveFavorites(this.favorites().map((f) => ({ ...f, selected })));
+  }
+
+  removeFavorite(fav: FavoriteProject) {
+    this.saveFavorites(
+      this.favorites().filter((f) => f.name !== fav.name),
+      `"${fav.name}" eliminado de favoritos.`,
+    );
   }
 
   refresh() {
@@ -94,8 +151,13 @@ export class Home implements OnInit {
       document.getElementById('term')?.focus();
       return;
     }
-    if (!this.project().trim()) {
+    const projects = this.selectedProjects();
+    if (!projects.length) {
       document.getElementById('project')?.focus();
+      return;
+    }
+    if (this.byBranch() && projects.length > 1) {
+      this.error.set('Para buscar en una sola rama selecciona un único proyecto (desmarca los demás favoritos o deja vacío el campo de proyecto).');
       return;
     }
     if (this.byBranch()) {
@@ -109,25 +171,35 @@ export class Home implements OnInit {
       }
     }
     this.submitting.set(true);
-    this.api
-      .create({
-        term: this.term().trim(),
-        fileName: this.fileName().trim(),
-        project: this.project().trim(),
-        byBranch: this.byBranch(),
-        repo: this.byBranch() ? this.repo().trim() : '',
-        branch: this.byBranch() ? this.branch().trim() : '',
-      })
-      .subscribe({
-        next: (s) => {
-          this.submitting.set(false);
-          this.router.navigate(['/busquedas', s.id]);
-        },
-        error: (e) => {
-          this.submitting.set(false);
-          this.error.set(e.error?.error ?? 'No se pudo iniciar la búsqueda.');
-        },
-      });
+    const fileName = this.fileName().trim();
+    // Una sesión por proyecto; cada creación informa su propio error sin cancelar las demás.
+    const requests = projects.map((project) =>
+      this.api
+        .create({
+          term: this.term().trim(),
+          fileName: fileName && projects.length > 1 ? `${fileName.replace(/\.txt$/i, '')}_${project}` : fileName,
+          project,
+          byBranch: this.byBranch(),
+          repo: this.byBranch() ? this.repo().trim() : '',
+          branch: this.byBranch() ? this.branch().trim() : '',
+        })
+        .pipe(
+          map((search) => ({ project, search, error: '' })),
+          catchError((e) => of({ project, search: null, error: e.error?.error ?? 'No se pudo iniciar la búsqueda.' })),
+        ),
+    );
+    forkJoin(requests).subscribe((results) => {
+      this.submitting.set(false);
+      const ok = results.filter((r) => r.search);
+      const failed = results.filter((r) => !r.search);
+      if (projects.length === 1 && ok.length === 1) {
+        this.router.navigate(['/busquedas', ok[0].search!.id]);
+        return;
+      }
+      if (ok.length) this.notice.set(`Se iniciaron ${ok.length} búsquedas en: ${ok.map((r) => r.project).join(', ')}.`);
+      if (failed.length) this.error.set(failed.map((r) => (projects.length > 1 ? `${r.project}: ${r.error}` : r.error)).join(' · '));
+      this.refresh();
+    });
   }
 
   cancel(s: Search) {

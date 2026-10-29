@@ -19,26 +19,64 @@
   </div>
 
   <form class="card" (submit)="submit($event)" novalidate>
-    <div class="field">
-      <label for="project">Proyecto de Azure DevOps <span class="req" aria-hidden="true">*</span></label>
-      <input
-        id="project"
-        name="project"
-        type="text"
-        autocomplete="off"
-        required
-        aria-required="true"
-        maxlength="64"
-        [value]="project()"
-        (input)="project.set($any($event.target).value)"
-        [attr.aria-invalid]="touched() && !project().trim() ? 'true' : null"
-        aria-describedby="project-help project-error"
-      />
-      <p id="project-help" class="help">Se buscará en todos los repositorios de este proyecto (organización: {{ config()?.org }}).</p>
-      @if (touched() && !project().trim()) {
-        <p id="project-error" class="field-error" role="alert">Debes ingresar el nombre del proyecto.</p>
+    <fieldset class="field branch-box">
+      <legend>Proyectos de Azure DevOps <span class="req" aria-hidden="true">*</span></legend>
+      <div class="field">
+        <label for="project">Proyecto</label>
+        <div class="input-row">
+          <input
+            id="project"
+            name="project"
+            type="text"
+            autocomplete="off"
+            maxlength="64"
+            [value]="project()"
+            (input)="project.set($any($event.target).value)"
+            (keydown.enter)="$event.preventDefault(); addFavorite()"
+            [attr.aria-invalid]="touched() && !selectedProjects().length ? 'true' : null"
+            aria-describedby="project-help project-error"
+          />
+          <button type="button" class="btn btn-secondary" (click)="addFavorite()">Agregar a favoritos</button>
+        </div>
+        <p id="project-help" class="help">
+          Organización: {{ config()?.org }}. Escribe un proyecto para buscar solo esta vez, o agrégalo a favoritos para conservarlo. Se buscará en el proyecto escrito y en todos los favoritos marcados.
+        </p>
+        @if (touched() && !selectedProjects().length) {
+          <p id="project-error" class="field-error" role="alert">Debes ingresar un proyecto o marcar al menos un favorito.</p>
+        }
+      </div>
+
+      @if (favorites().length) {
+        <div class="favorites-head">
+          <span id="fav-label">Favoritos ({{ favorites().length }})</span>
+          <button type="button" class="btn-link" (click)="selectAllFavorites(true)">Marcar todos</button>
+          <button type="button" class="btn-link" (click)="selectAllFavorites(false)">Desmarcar todos</button>
+        </div>
+        <ul class="favorites" aria-labelledby="fav-label">
+          @for (f of favorites(); track f.name) {
+            <li>
+              <label class="check">
+                <input type="checkbox" [checked]="f.selected" (change)="toggleFavorite(f, $any($event.target).checked)" />
+                {{ f.name }}
+              </label>
+              <button type="button" class="btn-link danger" (click)="removeFavorite(f)" [attr.aria-label]="'Quitar ' + f.name + ' de favoritos'">Quitar</button>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="help">Aún no tienes proyectos favoritos.</p>
       }
-    </div>
+      @if (favoriteError()) {
+        <p class="field-error" role="alert">{{ favoriteError() }}</p>
+      }
+      <p class="help" role="status" aria-live="polite">
+        @if (selectedProjects().length) {
+          Se buscará en {{ selectedProjects().length }} {{ selectedProjects().length === 1 ? 'proyecto' : 'proyectos' }}: <strong>{{ selectedProjects().join(', ') }}</strong>
+        } @else {
+          No hay proyectos seleccionados.
+        }
+      </p>
+    </fieldset>
 
     <div class="field">
       <label for="term">Dependencia, término o nombre de archivo <span class="req" aria-hidden="true">*</span></label>
@@ -102,7 +140,8 @@
       />
       <p id="file-help" class="help">
         Si lo dejas vacío se generará uno automático con el término y la fecha, por ejemplo
-        <code>busqueda_{{ project().trim() || 'proyecto' }}_{{ term().trim() || 'termino' }}_20261019-091500.txt</code>.
+        <code>busqueda_{{ selectedProjects()[0] || 'proyecto' }}_{{ term().trim() || 'termino' }}_20261019-091500.txt</code>.
+        Con varios proyectos se lanza una búsqueda por proyecto y, si indicas un nombre, se le agrega el proyecto al final.
       </p>
     </div>
 
@@ -111,7 +150,7 @@
     }
 
     <button type="submit" class="btn btn-primary" [disabled]="submitting()">
-      {{ submitting() ? 'Iniciando…' : 'Iniciar búsqueda' }}
+      {{ submitting() ? 'Iniciando…' : selectedProjects().length > 1 ? 'Iniciar ' + selectedProjects().length + ' búsquedas' : 'Iniciar búsqueda' }}
     </button>
   </form>
 

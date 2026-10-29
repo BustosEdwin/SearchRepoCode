@@ -29,3 +29,4 @@ Producción: `npm run build` en `frontend` y el backend sirve `frontend/dist` en
 - Rama única: con el check "Buscar en una sola rama" solo se clona y recorre ese repositorio y rama.
 - Rendimiento: clones superficiales (`--depth 1`), `REPO_CONCURRENCY` repositorios en paralelo por búsqueda y una sola búsqueda por árbol idéntico entre ramas. Con repositorios en paralelo el archivo repite el encabezado de repositorio/rama cuando cambia.
 - Detalle y "Analizar archivo": el filtrado corre en un Web Worker con almacenamiento columnar, de modo que escribir en el filtro no bloquea la interfaz (probado con 1 millón de filas).
+- Proyectos favoritos: en el formulario se pueden agregar proyectos de Azure DevOps a una lista de favoritos (persistida en `backend/data/favorites.json`, con su selección). Al iniciar, se lanza una búsqueda independiente por cada favorito marcado más el proyecto escrito, si hay uno. La búsqueda en una sola rama exige un único proyecto.

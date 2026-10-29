@@ -44,6 +44,11 @@ export interface AppConfig {
   maxConcurrent: number;
 }
 
+export interface FavoriteProject {
+  name: string;
+  selected: boolean;
+}
+
 export interface PatStatus {
   configured: boolean;
   masked: string;
@@ -147,6 +152,12 @@ export class SearchApi {
   }
   deletePat(key = '') {
     return this.http.delete<PatStatus>('/api/settings/pat', this.adminHeaders(key));
+  }
+  favorites() {
+    return this.http.get<FavoriteProject[]>('/api/favorites');
+  }
+  saveFavorites(projects: FavoriteProject[]) {
+    return this.http.put<FavoriteProject[]>('/api/favorites', { projects });
   }
   list() {
     return this.http.get<Search[]>('/api/searches');
