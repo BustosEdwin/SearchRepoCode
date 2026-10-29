@@ -210,7 +210,7 @@
     <div class="list-scroll" tabindex="0" role="region" aria-label="Listado de búsquedas">
     <ul class="list">
       @for (s of filtered(); track s.id) {
-        <li [class]="'card item status-' + s.status">
+        <li class="card item">
           <div class="item-head">
             <h3>
               <a [routerLink]="['/busquedas', s.id]">{{ s.term }}</a>
